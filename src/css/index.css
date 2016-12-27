@@ -1,0 +1,75 @@
+@import url(http://fonts.googleapis.com/css?family=Montserrat+Alternates);
+
+* {
+    margin:0;
+    padding:0;
+}
+
+body {
+  background-color:#f7f7f7;
+}
+
+.app {
+  display:  flex;
+}
+.main {
+  width:  80%;
+}
+
+.sidebar {
+  width:  20%;
+  position: fixed;
+  top: 0;
+  right: 0;
+  overflow-y: scroll;
+  max-height: 100vh;
+}
+
+.sidebar h2 {
+  font: 1.2em  'Montserrat Alternates';
+  text-align: center;
+}
+
+.sidebar span {
+  color:  gray;
+}
+.field {
+  display:flex;
+  position:relative;
+  margin:5em auto;
+  width:70%;
+  flex-direction:row;
+}
+
+.field>input[type=text] {
+  display:block;
+  font:1.2em 'Montserrat Alternates';
+}
+
+.field>input[type=text] {
+  flex:1;
+  padding:0.6em;
+  border:0.2em solid rgb(26, 188, 156);
+}
+
+.list-of-toys {
+  display: flex;
+  flex-wrap: wrap;
+  padding: 0 40px;
+}
+
+.toy {
+  display: block;
+  font-size: 12px;
+  width: calc(20% - 1em) !important;
+}
+
+.toy img {
+  cursor: pointer;
+}
+
+.wishlist-box {
+  background:  white;
+  padding: 10px;
+  margin: 10px 10px 0 0;
+}
