@@ -1,6 +1,6 @@
 import React from 'react';
 import WishlistItem from './WishlistItem.js';
-import { Message, List } from 'semantic-ui-react';
+import { Button, Message, List } from 'semantic-ui-react';
 
 class WishlistItems extends React.Component {
 
@@ -10,9 +10,7 @@ class WishlistItems extends React.Component {
   }
 
   renderList() {
-    console.log("RENDER LIST");
     const itemIds = Object.keys(this.props.items);
-    console.log(itemIds);
     if (itemIds.length === 0) {
       return (
         <Message visible>
@@ -22,13 +20,16 @@ class WishlistItems extends React.Component {
     }
 
     return (
-      <List divided verticalAlign='middle'>
-        {
-          Object
-          .keys(this.props.items)
-          .map(key => <WishlistItem key={key} index={key} details={this.props.items[key]} removeToyFromWishlist={this.props.removeToyFromWishlist} />)
-        }
-      </List>
+      <div>
+        <List divided verticalAlign='middle'>
+          {
+            Object
+            .keys(this.props.items)
+            .map(key => <WishlistItem key={key} index={key} details={this.props.items[key]} removeToyFromWishlist={this.props.removeToyFromWishlist} />)
+          }
+        </List>
+        <Button positive fluid onClick={this.props.validateList}>Finish</Button>
+      </div>
     )
   }
 

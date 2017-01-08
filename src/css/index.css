@@ -58,6 +58,17 @@ body {
   padding: 0 40px;
 }
 
+.main .list-of-recommended {
+  width: 80%;
+  background: lightgray;
+  position: fixed;
+  bottom:  0;
+  z-index:  1000;
+  display: flex;
+  flex-wrap: wrap;
+  padding: 10px 40px;
+}
+
 .toy {
   display: block;
   font-size: 12px;
