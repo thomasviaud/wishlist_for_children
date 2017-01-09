@@ -20,7 +20,11 @@ class WishlistApp extends React.Component {
     this.addToyToWishlist = this.addToyToWishlist.bind(this);
     this.addRecommendedToWishlist = this.addRecommendedToWishlist.bind(this);
     this.removeToyFromWishlist = this.removeToyFromWishlist.bind(this);
+    this.recommendedByRandom = this.recommendedByRandom.bind(this);
     this.recommendedByBuckets = this.recommendedByBuckets.bind(this);
+    this.recommendedByQuery = this.recommendedByQuery.bind(this);
+    this.recommendationBuilder = this.recommendationBuilder.bind(this);
+    this.getWishlistIds = this.getWishlistIds.bind(this);
     this.state = {
       toys: {},
       wishlist: {},
@@ -28,6 +32,13 @@ class WishlistApp extends React.Component {
     }
   }
 
+  componentWillMount() {
+    this.recommendedByRandom(5, res => {
+      this.setState({recommended: res});
+    })
+  }
+  // When the kid is done, he needs to validate his list. It will create a new entry in an ES index to
+  // later search by buckets.
   validateList() {
     const toys = {...this.state.wishlist};
     const array = [];
@@ -48,6 +59,8 @@ class WishlistApp extends React.Component {
     });
   }
 
+  // Each time the search input is edited it will query the main ES index of toys 
+  // and update the state accordingly.
   handleChange(e) {
     const search_query = e.target.value
     client.search({
@@ -61,18 +74,17 @@ class WishlistApp extends React.Component {
           }
         }
       }
-    }).then(function ( body ) {
+    }).then(( body ) => {
       const toys = {};
       for (const item of body.hits.hits) {
         toys[`toy-${item._id}`] = item;
         (`toy-${item._id}` in this.state.wishlist) ?  toys[`toy-${item._id}`]._status = 'off' : toys[`toy-${item._id}`]._status = 'on';
       }
       this.setState({ toys })
-    }.bind(this), function ( error ) {
-      console.trace( error.message );
     });
   }
 
+  // Add a toy from the results into the wishlist.
   addToyToWishlist(key) {
     const wishlist = {...this.state.wishlist};
     const toys = {...this.state.toys};
@@ -80,10 +92,12 @@ class WishlistApp extends React.Component {
     toys[key]._status = 'off';
     this.setState({ toys });
     this.setState({ wishlist }, () => {
-      this.recommendedByBuckets(key); 
+      console.log('Recommendation builder !');
+      this.recommendationBuilder(key);
     }); 
   }
 
+  // Add a toy from the recommendation bar into the wishlist.
   addRecommendedToWishlist(key) {
     const wishlist = {...this.state.wishlist};
     const recommended = {...this.state.recommended};
@@ -94,10 +108,11 @@ class WishlistApp extends React.Component {
       this.setState({ toys });
     }
     this.setState({ wishlist },() => {
-      this.recommendedByBuckets(key); 
+      this.recommendationBuilder(key);
     }); 
   }
 
+  // Remove a toy from the wishlist.
   removeToyFromWishlist(key) {
     const wishlist = {...this.state.wishlist};
     const toys = {...this.state.toys};
@@ -106,24 +121,91 @@ class WishlistApp extends React.Component {
       toys[key]._status = 'on';
       this.setState({ toys });
     }
-    this.setState({ wishlist });
-    // If the wishlist is not empty after removing one item
-    const wishlistKeys = Object.keys(wishlist);
-    if (wishlistKeys.length > 0) {
-      const newKey = wishlistKeys.slice(-1)[0];
-      console.log('New key : ',newKey);
-      this.recommendedByBuckets(newKey);
-    }
-    else {
-      console.log('Empty!');
-      this.setState({ recommended:{}})
-    }
+    this.setState({ wishlist }, () => {
+      // If the wishlist is not empty after removing one item
+      const wishlistKeys = Object.keys(wishlist);
+      if (wishlistKeys.length > 0) {
+        const newKey = wishlistKeys.slice(-1)[0];
+        this.recommendationBuilder(newKey);
+      }
+      else {
+        console.log('Empty wishlist, random recommendation!');
+        this.recommendedByRandom(5, (res) => {
+          this.setState({recommended: res})
+        });
+      }
+    });
   }
 
-  recommendedByBuckets(key) {
-    console.log('Key =>', key);
-    console.log('Recommended items =>', this.state.recommended);
-    console.log('Wishlist items =>', this.state.wishlist);
+  getWishlistIds() {
+    const wishlistIds = Object.keys(this.state.wishlist).map(i => {
+      return this.state.wishlist[i]._id;
+    })
+    return wishlistIds;
+  }
+
+  recommendationBuilder(key) {
+    let recommended, recommendedMid;
+    this.recommendedByBuckets(key,3, (res) => {
+      const recommendedByBuckets = res;
+      console.log('RecommendedByBuckets =>', recommendedByBuckets);
+      const recommendedByBucketsLen = res ? Object.keys(res).length : 0;
+      console.log('RecommendedByBucketsLen =>', recommendedByBucketsLen);
+      this.recommendedByQuery(key, 5 - recommendedByBucketsLen, (res) => {
+        const recommendedByQuery = res;
+        console.log('RecommendedByQuery =>', recommendedByQuery);
+        recommendedMid = Object.assign({}, recommendedByBuckets, recommendedByQuery);
+        console.log('RecommendedMid =>', recommendedMid);
+        const recommendedMidLen = recommendedMid ? Object.keys(recommendedMid).length : 0;
+        console.log('RecommendedMidLen =>', recommendedMidLen);
+        if(recommendedMidLen < 5) {
+            this.recommendedByRandom(5 - recommendedMidLen, (res) =>{
+            recommended = Object.assign({}, recommendedMid, res);
+            console.log("Recommended < 5", recommended);
+            this.setState({recommended});
+          });
+        }
+        else {
+          recommended = recommendedMid;
+          this.setState({recommended});
+        }
+      });
+    });
+  }
+
+  recommendedByQuery(key, n, cb) {
+    // Query search
+    client.search({
+      index: 'wishlist_catalog',
+      type: 'toy',
+      body: {
+        size: n,
+        query: {
+          bool: {
+            must_not: {
+                ids: {
+                  values: this.getWishlistIds()
+              }
+            },
+            should: {
+              match: {
+                title: this.state.wishlist[key]._source.title
+              }
+            }
+          }
+        }
+      }
+    }).then(( body ) => {
+      const recommended = {};
+      for (const item of body.hits.hits) {
+        recommended[`toy-${item._id}`] = item;
+        recommended[`toy-${item._id}`]._status = 'on';
+      }
+      cb(recommended);
+    });
+  }
+
+  recommendedByBuckets(key, n, cb) {
     // Bucket search
     client.search({
       index: 'wishlist_lists',
@@ -148,7 +230,9 @@ class WishlistApp extends React.Component {
               recommended_toys : {
                 significant_terms: {
                   field: "toys._id",
-                  min_doc_count: 1
+                  min_doc_count: 1,
+                  size:n,
+                  exclude : this.getWishlistIds()
                 }
               }
             }
@@ -159,9 +243,7 @@ class WishlistApp extends React.Component {
       // Retrieve an array of recommended Ids
       const recommendedIds = [];
       for (const item of body.aggregations.toys.recommended_toys.buckets) {
-        if (!(`toy-${item.key}` in this.state.wishlist)) {
-          recommendedIds.push(item.key);
-        }
+        recommendedIds.push(item.key);
       }
       // Search toys related to ids array
       client.search({
@@ -174,22 +256,54 @@ class WishlistApp extends React.Component {
            }
          }
         }
-      }).then(function ( body ) {
+      }).then(( body ) => {
         console.table(body.hits.hits);
         const recommended = {};
         for (const item of body.hits.hits) {
           recommended[`toy-${item._id}`] = item;
           recommended[`toy-${item._id}`]._status = 'on';
         }
-        this.setState({ recommended })
-      }.bind(this), function ( error ) {
-        console.trace( error.message );
+        //this.setState({ recommended })
+        cb(recommended);
       });
+    });
+  }
+
+  recommendedByRandom(n, cb) {
+    client.search({
+      index: 'wishlist_catalog',
+      type: 'toy',
+      body: {
+        size: n,
+        query: {
+          function_score: {
+            functions: [
+              {
+                random_score: {
+                  seed: Date.now()
+                }
+              }
+            ]
+          }
+        }
+      }
+    }).then(function ( body ) {
+      const recommended = {};
+      for (const item of body.hits.hits) {
+        if (!(`toy-${item._id}` in this.state.toys)) {
+          recommended[`toy-${item._id}`] = item;
+          recommended[`toy-${item._id}`]._status = 'on';
+        }
+        if (Object.keys(recommended).length === 5) {
+          break;
+        }
+      }
+      //this.setState({ recommended })
+      cb(recommended);
     }.bind(this), function ( error ) {
       console.trace( error.message );
     });
   }
-
 
   render() {
     return (

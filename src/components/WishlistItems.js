@@ -40,7 +40,7 @@ class WishlistItems extends React.Component {
     }, 0);
     return (
       <div className="wishlist-box">
-        <h2>my Wishlist <span>({total})</span></h2>
+        <h2>my Wishlist 📋 <span>({total})</span></h2>
         {this.renderList()}
       </div>
     )
