@@ -1,4 +1,4 @@
-@import url(http://fonts.googleapis.com/css?family=Montserrat+Alternates);
+@import url(https://fonts.googleapis.com/css?family=Montserrat+Alternates);
 
 * {
     margin:0;
@@ -9,6 +9,17 @@ body {
   background-color:#f7f7f7;
 }
 
+/*
+* INTRO & NOT FOUND
+*/
+
+.box {
+  margin: 30px 20%;
+}
+
+/*
+* APP
+*/
 .app {
   display:  flex;
 }

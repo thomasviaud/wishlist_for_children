@@ -1,13 +1,15 @@
 import React from 'react';
+import elasticsearch from 'elasticsearch';
+import { Card } from 'semantic-ui-react'
+
 import WishlistSearch from './WishlistSearch';
 import WishlistToy from './WishlistToy';
 import WishlistItems from './WishlistItems';
 import WishlistRecommended from './WishlistRecommended';
-import elasticsearch from 'elasticsearch';
-import { Card } from 'semantic-ui-react'
+
 
 let client = new elasticsearch.Client({
-  host: 'localhost:9200',
+  host: 'search-wishlist-es-epfawqjetbhlge2say6ibqm4ty.eu-central-1.es.amazonaws.com:80',
   //log: 'trace'
 })
 
@@ -35,8 +37,10 @@ class WishlistApp extends React.Component {
   componentWillMount() {
     this.recommendedByRandom(5, res => {
       this.setState({recommended: res});
+      console.log('Initial random state (componentWillMount)');
     })
   }
+
   // When the kid is done, he needs to validate his list. It will create a new entry in an ES index to
   // later search by buckets.
   validateList() {
@@ -47,7 +51,6 @@ class WishlistApp extends React.Component {
         array.push(toys[i]);
       }
     }
-    console.log(array);
     client.index({
       index: 'wishlist_lists',
       type: 'kidlist',
@@ -55,7 +58,9 @@ class WishlistApp extends React.Component {
         toys: array,
       }
     }, function (error, response) {
-      //
+      if(error) {
+        console.log('[Error] Can\'t index the list.');
+      }
     });
   }
 
@@ -92,7 +97,6 @@ class WishlistApp extends React.Component {
     toys[key]._status = 'off';
     this.setState({ toys });
     this.setState({ wishlist }, () => {
-      console.log('Recommendation builder !');
       this.recommendationBuilder(key);
     }); 
   }
@@ -129,7 +133,7 @@ class WishlistApp extends React.Component {
         this.recommendationBuilder(newKey);
       }
       else {
-        console.log('Empty wishlist, random recommendation!');
+        console.log('Random recommendation (empty list)');
         this.recommendedByRandom(5, (res) => {
           this.setState({recommended: res})
         });
@@ -145,32 +149,44 @@ class WishlistApp extends React.Component {
   }
 
   recommendationBuilder(key) {
-    let recommended, recommendedMid;
-    this.recommendedByBuckets(key,3, (res) => {
-      const recommendedByBuckets = res;
-      console.log('RecommendedByBuckets =>', recommendedByBuckets);
-      const recommendedByBucketsLen = res ? Object.keys(res).length : 0;
-      console.log('RecommendedByBucketsLen =>', recommendedByBucketsLen);
-      this.recommendedByQuery(key, 5 - recommendedByBucketsLen, (res) => {
-        const recommendedByQuery = res;
-        console.log('RecommendedByQuery =>', recommendedByQuery);
-        recommendedMid = Object.assign({}, recommendedByBuckets, recommendedByQuery);
-        console.log('RecommendedMid =>', recommendedMid);
-        const recommendedMidLen = recommendedMid ? Object.keys(recommendedMid).length : 0;
-        console.log('RecommendedMidLen =>', recommendedMidLen);
-        if(recommendedMidLen < 5) {
-            this.recommendedByRandom(5 - recommendedMidLen, (res) =>{
-            recommended = Object.assign({}, recommendedMid, res);
-            console.log("Recommended < 5", recommended);
-            this.setState({recommended});
-          });
-        }
-        else {
-          recommended = recommendedMid;
-          this.setState({recommended});
-        }
+    // Baseline system
+    if(this.props.pathname.slice(-1) === '0') {
+      console.log('Random recommendation (baseline system).');
+      this.recommendedByRandom(5, (res) =>{
+        this.setState({recommended:res});
+        return;
       });
-    });
+    }
+    // Recommended system
+    else {
+      console.log('RECOMMENDATION SYSTEM');
+      let recommended, recommendedMid;
+      this.recommendedByBuckets(key,3, (res) => {
+        const recommendedByBuckets = res;
+        console.log('RecommendedByBuckets =>', recommendedByBuckets);
+        const recommendedByBucketsLen = res ? Object.keys(res).length : 0;
+        console.log('RecommendedByBucketsLen =>', recommendedByBucketsLen);
+        this.recommendedByQuery(key, 5 - recommendedByBucketsLen, (res) => {
+          const recommendedByQuery = res;
+          console.log('RecommendedByQuery =>', recommendedByQuery);
+          recommendedMid = Object.assign({}, recommendedByBuckets, recommendedByQuery);
+          console.log('RecommendedMid =>', recommendedMid);
+          const recommendedMidLen = recommendedMid ? Object.keys(recommendedMid).length : 0;
+          console.log('RecommendedMidLen =>', recommendedMidLen);
+          if(recommendedMidLen < 5) {
+            this.recommendedByRandom(5 - recommendedMidLen, (res) =>{
+              recommended = Object.assign({}, recommendedMid, res);
+              console.log("Recommended < 5", recommended);
+              this.setState({recommended});
+            });
+          }
+          else {
+            recommended = recommendedMid;
+            this.setState({recommended});
+          }
+        });
+      });
+    }
   }
 
   recommendedByQuery(key, n, cb) {
@@ -245,6 +261,7 @@ class WishlistApp extends React.Component {
       for (const item of body.aggregations.toys.recommended_toys.buckets) {
         recommendedIds.push(item.key);
       }
+      console.log(recommendedIds);
       // Search toys related to ids array
       client.search({
         index: 'wishlist_catalog',
@@ -257,13 +274,11 @@ class WishlistApp extends React.Component {
          }
         }
       }).then(( body ) => {
-        console.table(body.hits.hits);
         const recommended = {};
         for (const item of body.hits.hits) {
           recommended[`toy-${item._id}`] = item;
           recommended[`toy-${item._id}`]._status = 'on';
         }
-        //this.setState({ recommended })
         cb(recommended);
       });
     });
@@ -298,7 +313,6 @@ class WishlistApp extends React.Component {
           break;
         }
       }
-      //this.setState({ recommended })
       cb(recommended);
     }.bind(this), function ( error ) {
       console.trace( error.message );

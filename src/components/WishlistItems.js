@@ -1,6 +1,8 @@
 import React from 'react';
-import WishlistItem from './WishlistItem.js';
 import { Button, Message, List } from 'semantic-ui-react';
+import { Link } from 'react-router';
+
+import WishlistItem from './WishlistItem.js';
 
 class WishlistItems extends React.Component {
 
@@ -28,7 +30,11 @@ class WishlistItems extends React.Component {
             .map(key => <WishlistItem key={key} index={key} details={this.props.items[key]} removeToyFromWishlist={this.props.removeToyFromWishlist} />)
           }
         </List>
-        <Button positive fluid onClick={this.props.validateList}>Finish</Button>
+        <Link to='/thanks'>
+          <Button positive fluid onClick={this.props.validateList}>
+            Finish
+          </Button>
+        </Link>
       </div>
     )
   }
